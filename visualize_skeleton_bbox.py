@@ -287,7 +287,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
             if person_id not in person_ids:
                 person_ids.append(person_id)
 
-            colour = COLOURS[person_id % len(COLOURS)]
+            colour = COLOURS_POINTS[person_id % len(COLOURS)]
             
 
             trajectory = np.loadtxt(os.path.join(trajectories_path, trajectory_file_name), delimiter=',', ndmin=2)
@@ -342,7 +342,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 continue
 
             
-            colour = COLOURS[person_id % len(COLOURS)]
+            colour = COLOURS_POINTS[person_id % len(COLOURS)]
 
             gt_trajectory = np.loadtxt(os.path.join(gt_trajectories_path, gt_trajectory_file_name),
                                        delimiter=',', ndmin=2)
