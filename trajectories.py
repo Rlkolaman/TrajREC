@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.preprocessing import quantile_transform, MinMaxScaler, RobustScaler
 
 from utils import compute_bounding_box, numpy_mse
+import cv2
 
 
 class StdScaler:
@@ -158,7 +159,7 @@ class Trajectory:
                 xs, ys = np.where(xs == 0.0, centre_x, xs) - centre_x, np.where(ys == 0.0, centre_y, ys) - centre_y
                 left, right, top, bottom = left - centre_x, right - centre_x, top - centre_y, bottom - centre_y
                 width, height = right - left, bottom - top
-                xs, ys = xs / width, ys / height
+                xs, ys = xs / (width+0.0001), ys / (height+0.0001)
                 kps = np.hstack((xs, ys)).ravel()
 
             coordinates[idx] = kps
@@ -206,6 +207,34 @@ def load_trajectories(trajectories_path, load_ordered=False):
         trajectory = np.loadtxt(trajectory_file_path, dtype=np.float32, delimiter=',', ndmin=2)
         trajectory_frames, trajectory_coordinates = trajectory[:, 0].astype(np.int32), trajectory[:, 1:]
         trajectory_id = os.path.splitext(csv_file_name)[0].replace(os.sep, '_')
+
+        display = False
+        if display == True:
+            # Your first_row array
+            for ii in range(len(trajectory)):
+                first_row = trajectory.astype(np.int32)[ii]
+
+                # Take first 34 elements (17 points)
+                first_row = np.concatenate([first_row[1:7], first_row[9:]])
+
+                # Reshape into list of [y, x] points (34 elements -> 17 points)
+                points = first_row.reshape(-1, 2)
+
+                # Swap x and y to interpret as [x, y] for cv2 (cv2 expects [x, y])
+                # points = points[:, [1, 0]]  # Swap columns: [y, x] -> [x, y]
+
+                # Create a blank canvas (white, 856X480 pixels)
+                canvas = np.ones((480, 856, 3), dtype=np.uint8) * 255
+
+                # Draw each point
+                for point in points:
+                    cv2.circle(canvas, tuple(point), radius=3, color=(0, 0, 255), thickness=-1)
+
+                # Display the canvas
+                cv2.imshow("Canvas", canvas)
+                cv2.waitKey(33)
+            cv2.destroyAllWindows()
+
         if '_' not in trajectory_id:
             trajectory_id = '_' + trajectory_id
             
