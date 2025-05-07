@@ -1,0 +1,11 @@
+einops
+huggingface-hub
+numpy
+pandas
+tqdm
+timm
+torch
+torchvision
+scikit-learn
+scipy
+wandb

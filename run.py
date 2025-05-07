@@ -19,7 +19,6 @@ from sklearn.metrics import roc_auc_score
 from dataloader import create_train_val_v2, _construct_output_data_alt, load_evaluation_data
 from trajectories import assemble_ground_truth_and_reconstructions, load_anomaly_masks, compute_rnn_ae_reconstruction_errors, summarise_reconstruction_errors, discard_information_from_padded_frames
 from utils import batch_inference
-
 from models.trajrec import trajrec_tiny, trajrec_small, trajrec_base, trajrec_large, trajrec_huge, TrajREC
 
 import wandb

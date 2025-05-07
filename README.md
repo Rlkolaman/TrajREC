@@ -91,6 +91,7 @@ For training and testing you can call to `run.py`. e.g. with default parameters:
 
 ```
 $ python run.py --trajectories data/HR-ShanghaiTech/training/trajectories-corrected/00 --testdata data/HR-ShanghaiTech/testing --batch_size 512 --wandb False
+python run.py --trajectories /home/pp/Desktop/datasets/trajrec_data/HR-ShanghaiTech/training/trajectories/00 --testdata /home/pp/Desktop/datasets/trajrec_data/HR-ShanghaiTech/testing --batch_size 256 --wandb False
 ```
 
 Use the `help` argument to get a full overview of all available arguments for runs.
