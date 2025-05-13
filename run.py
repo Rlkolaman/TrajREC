@@ -181,7 +181,7 @@ def run(args):
 
     train_loader = torch.utils.data.DataLoader(dataset_train, shuffle=True, batch_size=args['batch_size'], num_workers=4, pin_memory=True)
 
-    val_loader = torch.utils.data.DataLoader(dataset_val, shuffle=False, batch_size=args['batch_size'], num_workers=4, pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(dataset_val, shuffle=False, batch_size=args['batch_size'], num_workers=0, pin_memory=False)
 
 
     if 'trajrec' in args['model']:

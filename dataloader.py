@@ -106,7 +106,7 @@ def create_train_val_v2(trajectories_path, video_resolution, input_length, pred_
                         local_normalisation_strategy='zero_one', out_normalisation_strategy='zero_one'):
     video_resolution = [float(measurement) for measurement in video_resolution.split('x')]
     video_resolution = np.array(video_resolution, dtype=np.float32)
-
+    # print('hello')
     trajectories = load_trajectories(trajectories_path)
     #print('\nLoaded %d trajectories.' % len(trajectories))
 

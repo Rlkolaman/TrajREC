@@ -4,6 +4,10 @@ import numpy as np
 import cv2
 import os
 import tqdm
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+
 
 # BGR
 COLOURS = {(0, 1) : (255, 0, 255), 
@@ -45,7 +49,8 @@ COLOURS_POINTS = {
             15 : (255, 255, 0),
             12 : (255, 127, 64),
             14 : (255, 64, 0),
-            16 : (255, 0, 0)
+            16 : (255, 0, 0),
+            17: (255, 0, 0)
            }  # Dark Green
 
 
@@ -276,7 +281,20 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
     rendered_gt_frames_all = {}
     rendered_gt_frames_ind = {}
     person_ids = []
-    
+
+    def load_anomaly_masks(anomaly_masks_path):
+        file_names = os.listdir(anomaly_masks_path)
+        masks = {}
+        for file_name in file_names:
+            full_id = file_name.split('.')[0]
+            file_path = os.path.join(anomaly_masks_path, file_name)
+            masks[full_id] = np.load(file_path)
+
+        return masks
+    test_data_dir = '/home/pp/Downloads/data/HR-ShanghaiTech/testing'
+    camera_id = os.path.basename(os.path.normpath(frames_path)).split('_')[0]
+    masks = load_anomaly_masks(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
+
     if trajectories_path is not None:
         trajectories_files_names = sorted(os.listdir(trajectories_path))  # 001.csv, 002.csv, ...
         for trajectory_file_name in trajectories_files_names:
@@ -325,7 +343,20 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 
                 draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
                 draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
-                
+
+                track_id = str(int(trajectory_file_name.split('.csv')[0]))
+                cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-20)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                mask_disc = camera_id+'_'+str(frame_id).zfill(4)
+                is_it_anomaly_path = masks.get(mask_disc) is not None
+                if is_it_anomaly_path:
+                    is_it_anomaly = masks[mask_disc][int(track_id)]
+                    if is_it_anomaly:
+                        cv2.putText(frame, 'Anomaly', (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-40)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                        cv2.putText(blank_frame, 'Anomaly', (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-40)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
                 rendered_pred_frames_all[frame_id] = (frame,blank_frame)
                 if frame_id not in rendered_pred_frames_ind.keys():
@@ -376,13 +407,16 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 
                 #height, width = blank_frame_ind.shape[:2]
                 #left, right, top, bottom = compute_simple_bounding_box(skeleton_coordinates)
-                #bb_center = np.array([(left + right) / 2, (top + bottom) / 2], dtype=np.float32)
+                #bb_center = np.ar  ray([(left + right) / 2, (top + bottom) / 2], dtype=np.float32)
                 #target_center = np.array([3 * width / 4, height / 2], dtype=np.float32)
                 #displacement_vector = target_center - bb_center
-                
+                track_id = str(int(gt_trajectory_file_name.split('.csv')[0]))
+                cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-20)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
                 draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
                 draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
-                
+
 
                 rendered_gt_frames_all[frame_id] = (frame,blank_frame)
                 if frame_id not in rendered_gt_frames_ind.keys():
@@ -444,10 +478,23 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
 def main():
     args = parser.parse_args()
 
-    if not os.path.exists(args.write_dir):
-        os.makedirs(args.write_dir)
+    test_dir = '/home/pp/Desktop/datasets/trajrec_data/shanghaitech/testing/frames'
+    scene_names = os.listdir(test_dir)
+    trajectories_path_base = os.path.join(os.path.dirname(args.trajectories.rstrip('/')), '')
+    frames_path_base = os.path.join(os.path.dirname(args.frames.rstrip('/')), '')
+    gt_trajectories_path_base = os.path.join(os.path.dirname(os.path.dirname(args.gt_trajectories.rstrip('/'))), '')
+    for scene_name in scene_names:
+        scene_num  =  scene_name.split('_')[1]
+        camera_number = scene_name.split('_')[0]
+        # args.write_dir = 'visualization' + scene_name
+        args.trajectories = os.path.join(trajectories_path_base, scene_num)
+        args.frames = os.path.join(frames_path_base, scene_name)
+        args.gt_trajectories = os.path.join(gt_trajectories_path_base, camera_number, scene_num)
 
-    render_trajectories_skeletons(args)
+        if not os.path.exists(args.write_dir):
+            os.makedirs(args.write_dir)
+        if os.path.exists(args.trajectories):
+            render_trajectories_skeletons(args)
 
 
 if __name__ == '__main__':
