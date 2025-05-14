@@ -7,7 +7,7 @@ import tqdm
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-
+import pdb
 
 # BGR
 COLOURS = {(0, 1) : (255, 0, 255), 
@@ -261,18 +261,20 @@ def fill_multi(frames_path, frame_name,scale,ts,person_ids):
     
 
 def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path, trajectories_path, specific_person_id=None, scale=4):
-    
+    camera_id = os.path.basename(os.path.normpath(frames_path)).split('_')[0]
+
     vid_id = trajectories_path.split('/')[-1]
-    w_dirs = [os.path.join(write_dir,'frames',s,vid_id) for s in ['ind_pred','ind_gt','all_pred','all_gt']]
+    w_dirs = [os.path.join(write_dir,'frames',s,camera_id,vid_id) for s in ['ind_pred','ind_gt','all_pred','all_gt']]
     for d in w_dirs:
         if not os.path.isdir(d):
             os.makedirs(d)
     
-    wo_dirs = [os.path.join(write_dir,'trajectories',s,vid_id) for s in ['ind_pred','ind_gt','all_pred','all_gt']]
+    wo_dirs = [os.path.join(write_dir,'trajectories',s,camera_id,vid_id) for s in ['ind_pred','ind_gt','all_pred','all_gt']]
     for d in wo_dirs:
         if not os.path.isdir(d):
             os.makedirs(d)
-    
+
+
     frames_names = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
     max_frame_id = len(frames_names)
     rendered_pred_frames_all = {}
@@ -292,9 +294,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
 
         return masks
     test_data_dir = '/home/pp/Downloads/data/HR-ShanghaiTech/testing'
-    camera_id = os.path.basename(os.path.normpath(frames_path)).split('_')[0]
     masks = load_anomaly_masks(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
-
+    print(f'camera_id = {camera_id} scene id = {vid_id} ')
     if trajectories_path is not None:
         trajectories_files_names = sorted(os.listdir(trajectories_path))  # 001.csv, 002.csv, ...
         for trajectory_file_name in trajectories_files_names:
@@ -322,7 +323,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 blank_frame_ind = np.full_like(frame_ind, fill_value=255)
                 
                 coords, blank_frame_ind = prepare_keypoints(skeleton_coordinates.reshape(-1, 2))
-                
+                blank_frame_ind = blank_frame_ind.astype(np.uint8)
                 el = rendered_pred_frames_all.get(frame_id)
                 
                 if el is not None:
@@ -330,10 +331,10 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                     blank_frame = el[1]
                 else:
                     frame = frame_ind.copy()
-                    blank_frame = np.full_like(frame_ind, fill_value=255)
+                    blank_frame = np.full_like(frame_ind, fill_value=255).astype(np.uint8)
                 
-                draw_skeleton(frame, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
-                draw_skeleton(frame_ind, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
+                # draw_skeleton(frame, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
+                # draw_skeleton(frame_ind, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
                 
                 #height, width = blank_frame_ind.shape[:2]
                 #left, right, top, bottom = compute_simple_bounding_box(skeleton_coordinates)
@@ -341,21 +342,27 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 #target_center = np.array([3 * width / 4, height / 2], dtype=np.float32)
                 #displacement_vector = target_center - bb_center
                 
-                draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
-                draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
+                # draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
+                # draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
 
                 track_id = str(int(trajectory_file_name.split('.csv')[0]))
                 cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-20)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                mask_disc = camera_id+'_'+str(frame_id).zfill(4)
-                is_it_anomaly_path = masks.get(mask_disc) is not None
-                if is_it_anomaly_path:
-                    is_it_anomaly = masks[mask_disc][int(track_id)]
-                    if is_it_anomaly:
-                        cv2.putText(frame, 'Anomaly', (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-40)),
+                mask_disc = camera_id+'_'+trajectories_path.split('/')[-1]
+                is_it_anomaly_frame = masks.get(mask_disc) is not None
+                if is_it_anomaly_frame == True:
+                    # if int(frame_id) < len(masks[mask_disc]):
+                    is_it_anomaly_path = masks[mask_disc][int(frame_id)]
+                    # pdb.set_trace()  # Pause here
+                    if is_it_anomaly_path == 1:
+                        print(f'track_id {track_id} is an anomaly')
+                        coordinate_y = int(np.min(int(skeleton_coordinates[3]-40),0))
+                        coordinate_x = int(skeleton_coordinates[2])
+
+                        cv2.putText(frame, 'Anomaly', (coordinate_x, coordinate_y),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                        cv2.putText(blank_frame, 'Anomaly', (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-40)),
+                        cv2.putText(blank_frame, 'Anomaly', (coordinate_x, coordinate_y),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
                 rendered_pred_frames_all[frame_id] = (frame,blank_frame)
@@ -392,7 +399,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 blank_frame_ind = np.full_like(frame_ind, fill_value=255)
                 
                 coords, blank_frame_ind = prepare_keypoints(skeleton_coordinates.reshape(-1, 2))
-                
+                blank_frame_ind = blank_frame_ind.astype(np.uint8)
+
                 el = rendered_gt_frames_all.get(frame_id)
                 
                 if el is not None:
@@ -401,7 +409,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 else:
                     frame = frame_ind.copy()
                     blank_frame = np.full_like(frame_ind, fill_value=255)
-                
+                blank_frame = blank_frame.astype(np.uint8)
                 draw_skeleton(frame, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
                 draw_skeleton(frame_ind, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
                 
@@ -411,7 +419,9 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 #target_center = np.array([3 * width / 4, height / 2], dtype=np.float32)
                 #displacement_vector = target_center - bb_center
                 track_id = str(int(gt_trajectory_file_name.split('.csv')[0]))
-                cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-20)),
+                coordinate_y = int(np.min(int(skeleton_coordinates[3] - 40), 0))
+                coordinate_x = int(skeleton_coordinates[2])
+                cv2.putText(frame, str(track_id), (coordinate_x, coordinate_y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
                 draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
@@ -493,7 +503,7 @@ def main():
 
         if not os.path.exists(args.write_dir):
             os.makedirs(args.write_dir)
-        if os.path.exists(args.trajectories):
+        if os.path.exists(args.trajectories):# and scene_num=='0025':
             render_trajectories_skeletons(args)
 
 
