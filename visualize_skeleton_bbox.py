@@ -57,6 +57,9 @@ COLOURS_POINTS = {
 
 parser = argparse.ArgumentParser(description='Visualize the predicted skeletons with corresponding bounding boxes.')
 
+parser.add_argument('--elsec_db', type=bool, default=False, help='do you want to use elsec data base? y/n')
+parser.add_argument('--test_data_dir', type=str, default='', help='directory of the test dir for loading masks')
+
 parser.add_argument('--frames', type=str, help='Directory containing video frames.')
 parser.add_argument('--gt_trajectories', type=str,
                               help='Directory containing the ground-truth trajectories of people in the video.')
@@ -199,7 +202,8 @@ def render_trajectories_skeletons(args):
     except OSError:
         print(f' \n directory for the images already exists. IMAGES WILL BE REWRITTEN!!! \n')
         pass
-
+    test_data_dir = args.test_data_dir
+    elsec_data = args.elsec_data
     frames_path = args.frames
     gt_trajectories_path = args.gt_trajectories
     draw_gt_skeleton = args.draw_gt_skeleton
@@ -225,7 +229,8 @@ def render_trajectories_skeletons(args):
         draw_gt_bounding_box = draw_trajectories_bounding_box = False
 
 
-    _render_trajectories_skeletons(args.write_dir, frames_path, gt_trajectories_path, trajectories_path, specific_person_id, scale=args.scale)
+    _render_trajectories_skeletons(args.write_dir, frames_path, gt_trajectories_path, trajectories_path, specific_person_id, scale=args.scale,
+                                   elsec_data=elsec_data, test_data_dir=test_data_dir)
 
     print('Visualisation successfully rendered to %s' % args.write_dir)
 
@@ -260,7 +265,8 @@ def fill_multi(frames_path, frame_name,scale,ts,person_ids):
     return ts
     
 
-def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path, trajectories_path, specific_person_id=None, scale=4):
+def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path, trajectories_path,
+                                   specific_person_id=None, scale=4, elsec_data=False, test_data_dir = '/home/pp/Downloads/data/HR-ShanghaiTech/testing'):
     camera_id = os.path.basename(os.path.normpath(frames_path)).split('_')[0]
 
     vid_id = trajectories_path.split('/')[-1]
@@ -293,7 +299,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
             masks[full_id] = np.load(file_path)
 
         return masks
-    test_data_dir = '/home/pp/Downloads/data/HR-ShanghaiTech/testing'
+
     masks = load_anomaly_masks(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
     print(f'camera_id = {camera_id} scene id = {vid_id} ')
     if trajectories_path is not None:
@@ -487,7 +493,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
 
 def main():
     args = parser.parse_args()
-
+    args.elsec_db = True
     test_dir = '/home/pp/Desktop/datasets/trajrec_data/shanghaitech/testing/frames'
     scene_names = os.listdir(test_dir)
     trajectories_path_base = os.path.join(os.path.dirname(args.trajectories.rstrip('/')), '')
