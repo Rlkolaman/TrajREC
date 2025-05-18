@@ -1,8 +1,12 @@
 import argparse
 import math
+from datetime import datetime
+
 import numpy as np
 import cv2
 import os
+
+import pandas as pd
 import tqdm
 import matplotlib
 matplotlib.use('TkAgg')
@@ -197,22 +201,69 @@ def compute_simple_bounding_box(skeleton):
     return left, right, top, bottom
 
 def render_trajectories_skeletons(args):
+    """
+    Renders visualizations of trajectories and skeletons based on specified configurations.
+
+    This function generates images using the specified parameters, rendering trajectories and skeletons
+    from provided ground truth or predicted data. The output is saved in the directory specified by the user.
+    The function ensures to validate provided arguments and raises errors if required arguments are
+    missing or improperly specified.
+
+    Arguments:
+        args (argparse.Namespace): Encapsulates all the required input parameters.
+            write_dir: str
+                Directory to save the rendered images.
+            test_data_dir: str
+                Directory containing test dataset.
+            elsec_db: str
+                Path to elsec data for rendering.
+            frames: str
+                Path to the folder containing frame images.
+            gt_trajectories: str, optional
+                Path to the ground truth trajectories file.
+            draw_gt_skeleton: bool
+                Whether to draw ground truth skeletons or not.
+            draw_gt_bbox: bool
+                Whether to draw ground truth bounding boxes or not.
+            trajectories: str, optional
+                Path to the predicted trajectories file.
+            draw_pred_skeleton: bool
+                Whether to draw predicted skeletons or not.
+            draw_pred_bbox: bool
+                Whether to draw predicted bounding boxes or not.
+            person_id: int, optional
+                ID of the specific person to visualize.
+            draw_local_skeleton: bool
+                Whether to draw local skeleton for a specific individual.
+            scale: float, optional
+                Scaling factor to adjust rendering.
+
+    Raises:
+        ValueError: If neither ground truth nor predicted trajectories are provided.
+        ValueError: If none of the drawing options are specified.
+        ValueError: If `draw_local_skeleton` is specified without setting a `person_id`.
+
+    Returns:
+        None
+    """
     try:
         os.makedirs(args.write_dir)
     except OSError:
         print(f' \n directory for the images already exists. IMAGES WILL BE REWRITTEN!!! \n')
         pass
-    test_data_dir = args.test_data_dir
-    elsec_data = args.elsec_data
-    frames_path = args.frames
-    gt_trajectories_path = args.gt_trajectories
-    draw_gt_skeleton = args.draw_gt_skeleton
-    draw_gt_bounding_box = args.draw_gt_bbox
-    trajectories_path = args.trajectories
-    draw_trajectories_skeleton = args.draw_pred_skeleton
-    draw_trajectories_bounding_box = args.draw_pred_bbox
-    specific_person_id = args.person_id
-    draw_local_skeleton = args.draw_local_skeleton
+
+
+    test_data_dir = args.test_data_dir          # Directory containing test dataset
+    elsec_data = args.elsec_db                  # boolean flag if to use elsec database
+    frames_path = args.frames                    # Path to the folder with frame images
+    gt_trajectories_path = args.gt_trajectories  # Path to ground truth trajectories file
+    draw_gt_skeleton = args.draw_gt_skeleton     # Flag to control drawing ground truth skeletons
+    draw_gt_bounding_box = args.draw_gt_bbox     # Flag to control drawing ground truth bounding boxes
+    trajectories_path = args.trajectories        # Path to predicted trajectories file
+    draw_trajectories_skeleton = args.draw_pred_skeleton    # Flag to control drawing predicted skeletons
+    draw_trajectories_bounding_box = args.draw_pred_bbox   # Flag to control drawing predicted bounding boxes
+    specific_person_id = args.person_id          # ID of specific person to visualize
+    draw_local_skeleton = args.draw_local_skeleton  # Flag to control drawing local skeleton for specific person
 
     if gt_trajectories_path is None and trajectories_path is None:
         raise ValueError('At least one of --ground_truth_trajectories or --trajectories must be specified.')
@@ -281,8 +332,12 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
             os.makedirs(d)
 
 
-    frames_names = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
-    max_frame_id = len(frames_names)
+    if elsec_data==True:
+        frames_names = sorted(os.listdir(os.path.join(frames_path, vid_id, 'Pos','Images')))
+        max_frame_id = int((datetime.now() - datetime(1975, 1, 1)).total_seconds() * 30)
+    else:
+        frames_names = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
+        max_frame_id = len(frames_names)
     rendered_pred_frames_all = {}
     rendered_pred_frames_ind = {}
     
@@ -303,27 +358,40 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
     masks = load_anomaly_masks(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
     print(f'camera_id = {camera_id} scene id = {vid_id} ')
     if trajectories_path is not None:
-        trajectories_files_names = sorted(os.listdir(trajectories_path))  # 001.csv, 002.csv, ...
-        for trajectory_file_name in trajectories_files_names:
+        trajectories_files_names = sorted(os.listdir(trajectories_path))[0:100]  # 001.csv, 002.csv, ...
+        for indx, trajectory_file_name in enumerate(trajectories_files_names):
             person_id = int(trajectory_file_name.split('.')[0])
-            if specific_person_id is not None and specific_person_id != person_id:
+            if specific_person_id is not None and specific_person_id != person_id or person_id<0:
                 continue
-            print('Drawing skeleton for person_id:',person_id)
+            print(f'\rDrawing skeleton for person_id:{person_id} which is  {indx} out of {len(trajectories_files_names)}', end="")
             if person_id not in person_ids:
                 person_ids.append(person_id)
 
             colour = COLOURS_POINTS[person_id % len(COLOURS)]
-            
 
-            trajectory = np.loadtxt(os.path.join(trajectories_path, trajectory_file_name), delimiter=',', ndmin=2)
-            trajectory_frames = trajectory[:, 0].astype(np.int32)
+            if elsec_data == True:
+                trajectory_df = pd.read_csv(os.path.join(trajectories_path, trajectory_file_name))
+                image_file_name = trajectory_df.iloc[:, -1].tolist()
+                trajectory = trajectory_df.iloc[:, :-1].to_numpy()
+            else:
+                trajectory = np.loadtxt(os.path.join(trajectories_path, trajectory_file_name), delimiter=',', ndmin=2)
+            trajectory_frames = trajectory[:, 0].astype(np.int64)
             trajectory_coordinates = trajectory[:, 1:]
 
-            for frame_id, skeleton_coordinates in zip(trajectory_frames, trajectory_coordinates):
+            for index, (frame_id, skeleton_coordinates) in enumerate(zip(trajectory_frames, trajectory_coordinates)):
                 if frame_id >= max_frame_id:
                     break
-                
-                frame_ind = cv2.imread(os.path.join(frames_path, frames_names[frame_id]))
+                if elsec_data==True:
+                    frames_dir_name = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
+                    main_frame_name = [d for d in frames_dir_name if 'jpg' in d][0]
+                    frame_ind = cv2.imread(os.path.join(frames_path, main_frame_name))
+                    object_image = cv2.imread(os.path.join(frames_path, vid_id,'Pos', 'Images', image_file_name[index])+'.jpg')
+                    x1, y1 = int(min(skeleton_coordinates[0::2][0:4])), int(min(skeleton_coordinates[1::2][0:4]))
+                    x2, y2 = int(max(skeleton_coordinates[0::2][0:4])), int(max(skeleton_coordinates[1::2][0:4]))
+                    object_image = cv2.resize(object_image, (int(y2 - y1), int(x2 - x1)), interpolation=cv2.INTER_AREA)
+                    frame_ind[x1:x2, y1:y2] = object_image
+                else:
+                    frame_ind = cv2.imread(os.path.join(frames_path, frames_names[frame_id]))
                 h,w,c = frame_ind.shape
                 frame_ind = cv2.resize(frame_ind, (w*scale,h*scale), interpolation = cv2.INTER_AREA)
                 blank_frame_ind = np.full_like(frame_ind, fill_value=255)
@@ -379,7 +447,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 rendered_pred_frames_ind[frame_id][person_id] = (frame_ind,blank_frame_ind)
 
     if gt_trajectories_path is not None:
-        gt_trajectories_files_names = sorted(os.listdir(gt_trajectories_path))
+        gt_trajectories_files_names = sorted(os.listdir(gt_trajectories_path))[0:100]
         for gt_trajectory_file_name in gt_trajectories_files_names:
             person_id = int(gt_trajectory_file_name.split('.')[0])
             if specific_person_id is not None and specific_person_id != person_id:
@@ -388,18 +456,34 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
             
             colour = COLOURS_POINTS[person_id % len(COLOURS)]
 
-            gt_trajectory = np.loadtxt(os.path.join(gt_trajectories_path, gt_trajectory_file_name),
+            if elsec_data == True:
+                trajectory_df = pd.read_csv(os.path.join(trajectories_path, gt_trajectory_file_name))
+                image_file_name = trajectory_df.iloc[:, -1].tolist()
+                gt_trajectory = trajectory_df.iloc[:, :-1].to_numpy()
+            else:
+                gt_trajectory = np.loadtxt(os.path.join(gt_trajectories_path, gt_trajectory_file_name),
                                        delimiter=',', ndmin=2)
-            gt_trajectory_frames = gt_trajectory[:, 0].astype(np.int32)
+            gt_trajectory_frames = gt_trajectory[:, 0].astype(np.int64)
             gt_trajectory_coordinates = gt_trajectory[:, 1:]
 
-            for frame_id, skeleton_coordinates in zip(gt_trajectory_frames, gt_trajectory_coordinates):
+            for indx, (frame_id, skeleton_coordinates) in enumerate(zip(gt_trajectory_frames, gt_trajectory_coordinates)):
                 
                 skeleton_is_null = np.any(skeleton_coordinates)
                 if not skeleton_is_null:
                     continue
-                
-                frame_ind = cv2.imread(os.path.join(frames_path, frames_names[frame_id]))
+
+                if elsec_data == True:
+                    frames_dir_name = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
+                    main_frame_name = [d for d in frames_dir_name if 'jpg' in d][0]
+                    frame_ind = cv2.imread(os.path.join(frames_path, main_frame_name))
+                    object_image = cv2.imread(os.path.join(frames_path, vid_id,'Pos', 'Images', image_file_name[indx])+'.jpg')
+                    x1, y1 = int(min(skeleton_coordinates[0::2][0:4])), int(min(skeleton_coordinates[1::2][0:4]))
+                    x2, y2 = int(max(skeleton_coordinates[0::2][0:4])), int(max(skeleton_coordinates[1::2][0:4]))
+                    object_image = cv2.resize(object_image, (int(y2 - y1), int(x2 - x1)), interpolation=cv2.INTER_AREA)
+                    frame_ind[x1:x2, y1:y2] = object_image
+                else:
+                    frame_ind = cv2.imread(os.path.join(frames_path, frames_names[frame_id]))
+
                 h,w,c = frame_ind.shape
                 frame_ind = cv2.resize(frame_ind, (w*scale,h*scale), interpolation = cv2.INTER_AREA)
                 blank_frame_ind = np.full_like(frame_ind, fill_value=255)
@@ -440,8 +524,12 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 if person_id not in rendered_gt_frames_ind[frame_id].keys():
                     rendered_gt_frames_ind[frame_id][person_id] = []
                 rendered_gt_frames_ind[frame_id][person_id] = (frame_ind,blank_frame_ind)
-                
-    
+                print(
+                    f'\rDrawing skeleton for person_id:{person_id} which is  {indx} out of {len(gt_trajectories_files_names)}',
+                    end="")
+
+
+
     for frame_id, frame_name in tqdm.tqdm(enumerate(frames_names),total=len(frames_names)):
         
         pred_frame_ind = rendered_pred_frames_ind.get(frame_id)
@@ -494,23 +582,34 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
 def main():
     args = parser.parse_args()
     args.elsec_db = True
-    test_dir = '/home/pp/Desktop/datasets/trajrec_data/shanghaitech/testing/frames'
-    scene_names = os.listdir(test_dir)
-    trajectories_path_base = os.path.join(os.path.dirname(args.trajectories.rstrip('/')), '')
-    frames_path_base = os.path.join(os.path.dirname(args.frames.rstrip('/')), '')
-    gt_trajectories_path_base = os.path.join(os.path.dirname(os.path.dirname(args.gt_trajectories.rstrip('/'))), '')
-    for scene_name in scene_names:
-        scene_num  =  scene_name.split('_')[1]
-        camera_number = scene_name.split('_')[0]
-        # args.write_dir = 'visualization' + scene_name
-        args.trajectories = os.path.join(trajectories_path_base, scene_num)
-        args.frames = os.path.join(frames_path_base, scene_name)
-        args.gt_trajectories = os.path.join(gt_trajectories_path_base, camera_number, scene_num)
-
+    if args.elsec_db:
+        args.gt_trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories/2023_2_10'
+        args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories/2023_2_10'
+        args.frames = '/home/pp/Desktop/datasets/elsec_dataset/frame/01'
+        args.test_data_dir = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing'
         if not os.path.exists(args.write_dir):
             os.makedirs(args.write_dir)
-        if os.path.exists(args.trajectories):# and scene_num=='0025':
+        if os.path.exists(args.trajectories):  # and scene_num=='0025':
             render_trajectories_skeletons(args)
+    else:
+        test_dir = '/home/pp/Desktop/datasets/trajrec_data/shanghaitech/testing/frames'
+        scene_names = os.listdir(test_dir)
+        trajectories_path_base = os.path.join(os.path.dirname(args.trajectories.rstrip('/')), '')
+        frames_path_base = os.path.join(os.path.dirname(args.frames.rstrip('/')), '')
+        gt_trajectories_path_base = os.path.join(os.path.dirname(os.path.dirname(args.gt_trajectories.rstrip('/'))), '')
+        for scene_name in scene_names:
+            scene_num  =  scene_name.split('_')[1]
+            camera_number = scene_name.split('_')[0]
+            # args.write_dir = 'visualization' + scene_name
+            args.trajectories = os.path.join(trajectories_path_base, scene_num)
+            args.frames = os.path.join(frames_path_base, scene_name)
+
+            args.gt_trajectories = os.path.join(gt_trajectories_path_base, camera_number, scene_num)
+
+            if not os.path.exists(args.write_dir):
+                os.makedirs(args.write_dir)
+            if os.path.exists(args.trajectories):# and scene_num=='0025':
+                render_trajectories_skeletons(args)
 
 
 if __name__ == '__main__':
