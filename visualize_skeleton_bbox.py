@@ -1,4 +1,5 @@
 import argparse
+import copy
 import math
 from datetime import datetime
 
@@ -128,9 +129,9 @@ def draw_skeleton(frame, keypoints, colour, dotted=False, scale=4, scale_vis=Fal
         circle_thickness = -1
         radius =3*12
     else:
-        line_thickness=4
-        circle_thickness = 2
-        radius =3 
+        line_thickness=1
+        circle_thickness = 1
+        radius =1
 
 
     for i,(keypoint_id1, keypoint_id2) in enumerate(connections):
@@ -386,8 +387,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                     main_frame_name = [d for d in frames_dir_name if 'jpg' in d][0]
                     frame_ind = cv2.imread(os.path.join(frames_path, main_frame_name))
                     object_image = cv2.imread(os.path.join(frames_path, vid_id,'Pos', 'Images', image_file_name[index])+'.jpg')
-                    x1, y1 = int(min(skeleton_coordinates[0::2][0:4])), int(min(skeleton_coordinates[1::2][0:4]))
-                    x2, y2 = int(max(skeleton_coordinates[0::2][0:4])), int(max(skeleton_coordinates[1::2][0:4]))
+                    y1, x1 = int(min(skeleton_coordinates[0::2][0:4])), int(min(skeleton_coordinates[1::2][0:4]))
+                    y2, x2 = int(max(skeleton_coordinates[0::2][0:4])), int(max(skeleton_coordinates[1::2][0:4]))
                     object_image = cv2.resize(object_image, (int(y2 - y1), int(x2 - x1)), interpolation=cv2.INTER_AREA)
                     frame_ind[x1:x2, y1:y2] = object_image
                 else:
@@ -407,8 +408,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                     frame = frame_ind.copy()
                     blank_frame = np.full_like(frame_ind, fill_value=255).astype(np.uint8)
                 
-                # draw_skeleton(frame, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
-                # draw_skeleton(frame_ind, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
+                draw_skeleton(frame, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
+                draw_skeleton(frame_ind, keypoints=skeleton_coordinates.reshape(-1, 2), colour=colour, dotted=False, scale=scale)
                 
                 #height, width = blank_frame_ind.shape[:2]
                 #left, right, top, bottom = compute_simple_bounding_box(skeleton_coordinates)
@@ -416,11 +417,11 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 #target_center = np.array([3 * width / 4, height / 2], dtype=np.float32)
                 #displacement_vector = target_center - bb_center
                 
-                # draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
-                # draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
+                draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
+                draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
 
                 track_id = str(int(trajectory_file_name.split('.csv')[0]))
-                cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-20)),
+                cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-10)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
                 mask_disc = camera_id+'_'+trajectories_path.split('/')[-1]
@@ -450,7 +451,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
         gt_trajectories_files_names = sorted(os.listdir(gt_trajectories_path))[0:100]
         for gt_trajectory_file_name in gt_trajectories_files_names:
             person_id = int(gt_trajectory_file_name.split('.')[0])
-            if specific_person_id is not None and specific_person_id != person_id:
+            if specific_person_id is not None and specific_person_id != person_id or person_id<0:
                 continue
 
             
@@ -477,8 +478,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                     main_frame_name = [d for d in frames_dir_name if 'jpg' in d][0]
                     frame_ind = cv2.imread(os.path.join(frames_path, main_frame_name))
                     object_image = cv2.imread(os.path.join(frames_path, vid_id,'Pos', 'Images', image_file_name[indx])+'.jpg')
-                    x1, y1 = int(min(skeleton_coordinates[0::2][0:4])), int(min(skeleton_coordinates[1::2][0:4]))
-                    x2, y2 = int(max(skeleton_coordinates[0::2][0:4])), int(max(skeleton_coordinates[1::2][0:4]))
+                    y1, x1 = int(min(skeleton_coordinates[0::2][0:4])), int(min(skeleton_coordinates[1::2][0:4]))
+                    y2, x2 = int(max(skeleton_coordinates[0::2][0:4])), int(max(skeleton_coordinates[1::2][0:4]))
                     object_image = cv2.resize(object_image, (int(y2 - y1), int(x2 - x1)), interpolation=cv2.INTER_AREA)
                     frame_ind[x1:x2, y1:y2] = object_image
                 else:
@@ -509,7 +510,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 #target_center = np.array([3 * width / 4, height / 2], dtype=np.float32)
                 #displacement_vector = target_center - bb_center
                 track_id = str(int(gt_trajectory_file_name.split('.csv')[0]))
-                coordinate_y = int(np.min(int(skeleton_coordinates[3] - 40), 0))
+                coordinate_y = int(np.min(int(skeleton_coordinates[3] - 10), 0))
                 coordinate_x = int(skeleton_coordinates[2])
                 cv2.putText(frame, str(track_id), (coordinate_x, coordinate_y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -517,7 +518,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 draw_skeleton(blank_frame_ind, keypoints=coords,colour=colour, dotted=False, scale=scale, scale_vis=True)
                 draw_skeleton(blank_frame, keypoints=skeleton_coordinates.reshape(-1, 2),colour=colour, dotted=False, scale=scale)
 
-
+                # plt.imshow(frame)
+                # plt.pause(0.1)
                 rendered_gt_frames_all[frame_id] = (frame,blank_frame)
                 if frame_id not in rendered_gt_frames_ind.keys():
                     rendered_gt_frames_ind[frame_id] = {}
@@ -525,36 +527,47 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                     rendered_gt_frames_ind[frame_id][person_id] = []
                 rendered_gt_frames_ind[frame_id][person_id] = (frame_ind,blank_frame_ind)
                 print(
-                    f'\rDrawing skeleton for person_id:{person_id} which is  {indx} out of {len(gt_trajectories_files_names)}',
+                    f'\rDrawing skeleton for person_id:{person_id} which is  {indx} out of {len(gt_trajectory_frames)}',
                     end="")
 
 
-
+    if elsec_data == True:
+        frames_path = os.path.join(frames_path, vid_id,'Pos', 'Images')
+        frames_names = set(list(rendered_pred_frames_ind.keys()))
+        # frames_dir_name = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
+        # main_frame_name = [d for d in frames_dir_name if 'jpg' in d][0]
+        # frame_ind = cv2.imread(os.path.join(frames_path, main_frame_name))
     for frame_id, frame_name in tqdm.tqdm(enumerate(frames_names),total=len(frames_names)):
-        
+        if elsec_data == True:
+            frame_id = copy.deepcopy(frame_name)
+            frames_dir_name = sorted(os.listdir(frames_path))  # 000.jpg, 001.jpg, ...
+            frame_name = [d for d in frames_dir_name if 'jpg' in d][0]
+
         pred_frame_ind = rendered_pred_frames_ind.get(frame_id)
         pred_frame_all = rendered_pred_frames_all.get(frame_id)
         gt_frame_ind = rendered_gt_frames_ind.get(frame_id)
         gt_frame_all = rendered_gt_frames_all.get(frame_id)
-        
-        
-        pred_frame_all = fill(frames_path, frame_name,scale,pred_frame_all)
-        pred_frame_ind = fill_multi(frames_path, frame_name,scale,pred_frame_ind,person_ids)
-        
-        gt_frame_all = fill(frames_path, frame_name,scale,gt_frame_all)
-        gt_frame_ind = fill_multi(frames_path, frame_name,scale,gt_frame_ind,person_ids)
-                
-        
+
+        if elsec_data == True:
+            frame_name = str(frame_id) + '.jpg'
+        else:
+            pred_frame_all = fill(frames_path, frame_name,scale,pred_frame_all)
+            pred_frame_ind = fill_multi(frames_path, frame_name,scale,pred_frame_ind,person_ids)
+
+            gt_frame_all = fill(frames_path, frame_name, scale, gt_frame_all)
+            gt_frame_ind = fill_multi(frames_path, frame_name, scale, gt_frame_ind, person_ids)
+
+
         #cv2.imwrite(os.path.join(w_dirs[0],frame_name), pred_frame_ind[0])
         #cv2.imwrite(os.path.join(w_dirs[1],frame_name), gt_frame_ind[0])
         cv2.imwrite(os.path.join(w_dirs[2],frame_name), pred_frame_all[0])
         cv2.imwrite(os.path.join(w_dirs[3],frame_name), gt_frame_all[0])
-        
+
         #cv2.imwrite(os.path.join(wo_dirs[0],frame_name), pred_frame_ind[1])
         #cv2.imwrite(os.path.join(wo_dirs[1],frame_name), gt_frame_ind[1])
         cv2.imwrite(os.path.join(wo_dirs[2],frame_name), pred_frame_all[1])
         cv2.imwrite(os.path.join(wo_dirs[3],frame_name), gt_frame_all[1])
-        
+
         for person_id in pred_frame_ind.keys():
             pred_frame_ind_pid = pred_frame_ind.get(person_id)
             if not os.path.isdir(os.path.join(w_dirs[0],str(person_id))):
@@ -563,8 +576,8 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 os.makedirs(os.path.join(wo_dirs[0],str(person_id)))
             cv2.imwrite(os.path.join(w_dirs[0],str(person_id),frame_name), pred_frame_ind_pid[0])
             cv2.imwrite(os.path.join(wo_dirs[0],str(person_id),frame_name), pred_frame_ind_pid[1])
-        
-        
+
+
         for person_id in gt_frame_ind.keys():
             gt_frame_ind_pid = gt_frame_ind.get(person_id)
             gt_frame_ind_pid = fill(frames_path, frame_name,scale,gt_frame_ind_pid)
