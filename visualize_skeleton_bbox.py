@@ -315,7 +315,16 @@ def fill_multi(frames_path, frame_name,scale,ts,person_ids):
             ts2 = np.full_like(ts1, fill_value=255)
             ts[p] = (ts1,ts2)
     return ts
-    
+
+
+def load_anomaly_masks_elsec(anomaly_masks_path):
+    file_names = os.listdir(anomaly_masks_path)
+    masks = {}
+    for file_name in file_names:
+        if file_name.split('.')[1] == 'csv':
+            pandas_df = pd.read_csv(os.path.join(anomaly_masks_path, file_name))
+            masks = dict(zip(pandas_df.iloc[:, 0], pandas_df.iloc[:,1]))
+    return masks
 
 def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path, trajectories_path,
                                    specific_person_id=None, scale=4, elsec_data=False, test_data_dir = '/home/pp/Downloads/data/HR-ShanghaiTech/testing'):
@@ -356,10 +365,13 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
 
         return masks
 
-    masks = load_anomaly_masks(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
+    if elsec_data == True:
+        masks = load_anomaly_masks_elsec(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
+    else:
+        masks = load_anomaly_masks(os.path.join(test_data_dir, 'frame_level_masks', camera_id))
     print(f'camera_id = {camera_id} scene id = {vid_id} ')
     if trajectories_path is not None:
-        trajectories_files_names = sorted(os.listdir(trajectories_path))[0:100]  # 001.csv, 002.csv, ...
+        trajectories_files_names = sorted(os.listdir(trajectories_path))[0:200]  # 001.csv, 002.csv, ...
         for indx, trajectory_file_name in enumerate(trajectories_files_names):
             person_id = int(trajectory_file_name.split('.')[0])
             if specific_person_id is not None and specific_person_id != person_id or person_id<0:
@@ -424,13 +436,19 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 cv2.putText(frame, str(track_id), (int(skeleton_coordinates[2]), int(skeleton_coordinates[3]-10)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                mask_disc = camera_id+'_'+trajectories_path.split('/')[-1]
-                is_it_anomaly_frame = masks.get(mask_disc) is not None
-                if is_it_anomaly_frame == True:
+                if elsec_data == True:
+                    does_the_setup_exists = True
+                else:
+                    mask_disc = camera_id+'_'+trajectories_path.split('/')[-1]
+                    does_the_setup_exists = masks.get(mask_disc) is not None
+                if does_the_setup_exists == True:
                     # if int(frame_id) < len(masks[mask_disc]):
-                    is_it_anomaly_path = masks[mask_disc][int(frame_id)]
+                    if elsec_data == True:
+                        is_it_anomaly_frame = masks[int(frame_id)]
+                    else:
+                        is_it_anomaly_frame = masks[mask_disc][int(frame_id)]
                     # pdb.set_trace()  # Pause here
-                    if is_it_anomaly_path == 1:
+                    if is_it_anomaly_frame == 1:
                         print(f'track_id {track_id} is an anomaly')
                         coordinate_y = int(np.min(int(skeleton_coordinates[3]-40),0))
                         coordinate_x = int(skeleton_coordinates[2])
@@ -448,7 +466,7 @@ def _render_trajectories_skeletons(write_dir, frames_path, gt_trajectories_path,
                 rendered_pred_frames_ind[frame_id][person_id] = (frame_ind,blank_frame_ind)
 
     if gt_trajectories_path is not None:
-        gt_trajectories_files_names = sorted(os.listdir(gt_trajectories_path))[0:100]
+        gt_trajectories_files_names = sorted(os.listdir(gt_trajectories_path))[0:200]
         for gt_trajectory_file_name in gt_trajectories_files_names:
             person_id = int(gt_trajectory_file_name.split('.')[0])
             if specific_person_id is not None and specific_person_id != person_id or person_id<0:
