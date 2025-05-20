@@ -26,7 +26,8 @@ import wandb
 
 
 @torch.no_grad()
-def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size=None, setting='future', is_avenue=False):
+def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size=None, setting='future', is_avenue=False,
+                         elsec_data=False):
     input_length = model.input_length
     pred_length = model.prediction_length
 
@@ -58,7 +59,7 @@ def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size
                                                                                     pred_errors, pred_length)
         pred_ids, pred_frames, pred_errors = summarise_reconstruction_errors(pred_errors, pred_frames, pred_ids)
         y_true_pred, y_hat_pred, y_grouped_true, y_grouped_hat = assemble_ground_truth_and_reconstructions(
-                anomaly_masks, pred_ids, pred_frames, pred_errors, return_grouped_scores=True)
+                anomaly_masks, pred_ids, pred_frames, pred_errors, return_grouped_scores=True, elsec_dat=elsec_data)
         all_y_true.append(y_true_pred)
         all_y_hat.append(y_hat_pred)
         all_y_grouped_true.update(y_grouped_true)
@@ -114,6 +115,14 @@ def create_train_val_datasets(args):
     return x_local_train.shape[-1], TensorDataset(*train_tensors), TensorDataset(*val_tensors), \
             bb_scaler, joint_scaler, out_scaler
 
+def load_anomaly_masks_elsec(anomaly_masks_path):
+    file_names = os.listdir(anomaly_masks_path)
+    masks = {}
+    for file_name in file_names:
+        if file_name.split('.')[1] == 'csv':
+            pandas_df = pd.read_csv(os.path.join(anomaly_masks_path, file_name))
+            masks = dict(zip(pandas_df.iloc[:, 0], pandas_df.iloc[:,1]))
+    return masks
 
 def run(args):
     print(args)
@@ -174,7 +183,10 @@ def run(args):
     data_test = []
     for camera_id in sorted(os.listdir(os.path.join(args['testdata'], 'trajectories'))):
         tpath = os.path.join(os.path.join(args['testdata'], 'trajectories'), camera_id)
-        masks = load_anomaly_masks(os.path.join(args['testdata'], 'frame_level_masks', camera_id))
+        if args["elsec_data"] == True:
+           masks = load_anomaly_masks_elsec(os.path.join(args['testdata'], 'frame_level_masks', camera_id))
+        else:
+            masks = load_anomaly_masks(os.path.join(args['testdata'], 'frame_level_masks', camera_id))
         ids, frames, X_bb, X_joints, X_out, _, _, _ = load_evaluation_data(bb_scaler,joint_scaler,out_scaler,tpath,inp_len=args['input_length'],inp_gap=0,pred_len=args['pred_length'],res=res,bb_norm='zero_one',joint_norm='zero_one',out_norm='zero_one', rec_data=True,sort='avenue' in args['testdata'].lower())
         data_test.append((masks, ids, frames, X_bb, X_joints, X_out))
     
@@ -298,7 +310,8 @@ def run(args):
                 if 'val' in phase:
                     
                     auc_pred, _, _ = prediction_auc_score(model, data_test, reconstruct_original_data=True,
-                                                batch_size=args['batch_size'], setting=setting, is_avenue='avenue' in args['trajectories'].lower())
+                                                batch_size=args['batch_size'], setting=setting, is_avenue='avenue' in args['trajectories'].lower(),
+                                                          elsec_data=args['elsec_data'])
                     print(f'Test setting {setting}: [MSE: {loss_meter.avg:.6f} | AUC: {auc_pred:.4f}]')
                     stats[setting] = [loss_meter.avg,auc_pred]
                     if args['wandb']:
@@ -397,10 +410,11 @@ if __name__=='__main__':
     parser.add_argument('--wandb',default=True,type=lambda x: (str(x).lower() == 'true'),help='Bool indicating if to use wandb')
     parser.add_argument('--save_best',default=True,type=lambda x: (str(x).lower() == 'true'),help='Bool if to save the checkpoint with best (avg) AUC')
     parser.add_argument('--eval_only',default=False,type=lambda x: (str(x).lower() == 'true'),help='Bool if to only run inference.')
+    parser.add_argument('--elsec_data',default=True,type=bool,help='Bool if to use elsec data')
 
     _args = parser.parse_args()
     _args = vars(_args)
-
+    # _args.elsec_data = True
     aucs = run(_args)
     print(aucs)
 

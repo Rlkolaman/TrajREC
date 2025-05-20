@@ -513,7 +513,7 @@ def compute_rnn_ae_reconstruction_errors(X, reconstructed_X, loss):
     return reconstruction_errors.reshape(num_examples, input_length)
 
 
-def summarise_reconstruction_errors(reconstruction_errors, frames, trajectory_ids):
+def summarise_reconstruction_errors(reconstruction_errors, frames, trajectory_ids, elsec_data=False):
     """
     Simplify skeleton trajectory prediction errors by averaging errors of overlapping predictions.
     The result will still have multiple scores per frame numbers when different trajectories (persons) overlap.
@@ -521,7 +521,10 @@ def summarise_reconstruction_errors(reconstruction_errors, frames, trajectory_id
     unique_ids = np.unique(trajectory_ids)
     all_trajectory_ids, all_summarised_frames, all_summarised_errors = [], [], []
     for trajectory_id in unique_ids:
-        mask = trajectory_ids == trajectory_id
+        if elsec_data ==True:
+            tst = 1
+        else:
+            mask = trajectory_ids == trajectory_id
         current_frames = frames[mask]
         current_errors = reconstruction_errors[mask]
         summarised_frames, summarised_errors = summarise_reconstruction_errors_per_frame(current_errors, current_frames)
