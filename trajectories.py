@@ -1,6 +1,7 @@
 import glob
 import os
 import numpy as np
+import pandas as pd
 from sklearn.preprocessing import quantile_transform, MinMaxScaler, RobustScaler
 
 from utils import compute_bounding_box, numpy_mse
@@ -196,15 +197,19 @@ class Trajectory:
             consecutive_missing_steps = 0
 
 
-def load_trajectories(trajectories_path, load_ordered=False):
+def load_trajectories(trajectories_path, load_ordered=False, elsec_data=False):
     trajectories = {}
     csv_files = [f for f in glob.iglob('**/*.csv', root_dir=trajectories_path, recursive=True)]
     if load_ordered:
         csv_files = sorted(csv_files)
     for csv_file_name in csv_files:
         trajectory_file_path = os.path.join(trajectories_path, csv_file_name)
-        trajectory = np.loadtxt(trajectory_file_path, dtype=np.float32, delimiter=',', ndmin=2)
-        trajectory_frames, trajectory_coordinates = trajectory[:, 0].astype(np.int32), trajectory[:, 1:]
+        if elsec_data:
+            trajectory_df = pd.read_csv(trajectory_file_path)
+            trajectory = trajectory_df.iloc[:, :-1].to_numpy().astype(np.float32)
+        else:
+            trajectory = np.loadtxt(trajectory_file_path, dtype=np.float32, delimiter=',', ndmin=2)
+        trajectory_frames, trajectory_coordinates = trajectory[:, 0].astype(np.int64), trajectory[:, 1:]
         trajectory_id = os.path.splitext(csv_file_name)[0].replace(os.sep, '_')
         if '_' not in trajectory_id:
             trajectory_id = '_' + trajectory_id
@@ -241,19 +246,33 @@ def load_anomaly_masks(anomaly_masks_path):
 
 def assemble_ground_truth_and_reconstructions(anomaly_masks, trajectory_ids,
                                               reconstruction_frames, reconstruction_errors,
-                                              return_video_ids=False, return_grouped_scores=False):
+                                              return_video_ids=False, return_grouped_scores=False, elsec_data=False):
     y_true, y_hat = {}, {}
-    for full_id in anomaly_masks.keys():
-        _, video_id = full_id.split('_')
-        y_true[video_id] = anomaly_masks[full_id].astype(np.int32)
-        y_hat[video_id] = np.zeros_like(y_true[video_id], dtype=np.float32)
+    if elsec_data:
+        y_true_list = []
+        for full_id in sorted(anomaly_masks.keys()):
+            y_true_list.append(anomaly_masks[full_id])
+        y_true[0] = np.array(y_true_list)
+        y_hat[0] = np.zeros_like(y_true[0], dtype=np.float32)
+    else:
+        for full_id in anomaly_masks.keys():
+            _, video_id = full_id.split('_')
+            y_true[video_id] = anomaly_masks[full_id].astype(np.int32)
+            y_hat[video_id] = np.zeros_like(y_true[video_id], dtype=np.float32)
+            # print(y_hat[video_id])
 
     unique_ids = np.unique(trajectory_ids)
-    for trajectory_id in unique_ids:
-        video_id, _ = trajectory_id.split('_')
-        indices = trajectory_ids == trajectory_id
-        frames = reconstruction_frames[indices]
-        y_hat[video_id][frames] = np.maximum(y_hat[video_id][frames], reconstruction_errors[indices])
+    if elsec_data:
+            for trajectory_id in unique_ids:
+                indices = trajectory_ids == trajectory_id
+                frames = reconstruction_frames[indices]
+                y_hat[0][frames] = np.maximum(y_hat[0][frames], reconstruction_errors[indices])
+    else:
+        for trajectory_id in unique_ids:
+            video_id, _ = trajectory_id.split('_')
+            indices = trajectory_ids == trajectory_id
+            frames = reconstruction_frames[indices]
+            y_hat[video_id][frames] = np.maximum(y_hat[video_id][frames], reconstruction_errors[indices])
 
     y_true_, y_hat_, video_ids = [], [], []
     for video_id in sorted(y_true.keys()):
@@ -324,7 +343,7 @@ def scale_trajectories_zero_one(X, scaler=None):
         scaler.fit(X)
 
     num_examples = X.shape[0]
-    X_scaled = np.where(X == 0.0, np.tile(scaler.data_min_, reps=[num_examples, 1]), X)
+    X_scaled = np.where(X == 0.0, np.tile(scaler.data_min_, reps=[num_examples, 1]), X).astype(np.float32)
     X_scaled = scaler.transform(X_scaled)
 
     return X_scaled, scaler
