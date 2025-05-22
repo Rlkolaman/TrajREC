@@ -275,6 +275,7 @@ def assemble_ground_truth_and_reconstructions(anomaly_masks, trajectory_ids,
             y_hat[video_id][frames] = np.maximum(y_hat[video_id][frames], reconstruction_errors[indices])
 
     y_true_, y_hat_, video_ids = [], [], []
+
     for video_id in sorted(y_true.keys()):
         y_true_.append(y_true[video_id])
         y_hat_.append(y_hat[video_id])
