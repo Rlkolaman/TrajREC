@@ -128,8 +128,8 @@ def load_anomaly_masks_elsec(anomaly_masks_path):
             pandas_df = pd.read_csv(os.path.join(anomaly_masks_path, file_name))
             masks = dict(zip(pandas_df.iloc[:, 0], pandas_df.iloc[:,1]))
 
-    # Convert dictionary values to numpy array
-    sorted_keys = sorted(masks.keys())
+    # Convert dictionary values to numpy array and remove duplicates
+    sorted_keys = sorted(set(masks.keys()))
     masks = np.array([masks[k] for k in sorted_keys])
     return masks
 
@@ -432,8 +432,8 @@ if __name__=='__main__':
 
     _args = parser.parse_args()
     # _args.elsec_data = True
-    # _args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories'
-    # _args.testdata = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/'
+    _args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories'
+    _args.testdata = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/'
     _args = vars(_args)
     aucs = run(_args)
     print(aucs)
