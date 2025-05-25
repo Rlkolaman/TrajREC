@@ -8,6 +8,7 @@ import pickle
 import random
 import sys
 import numpy as np
+import pandas as pd
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data.distributed
@@ -19,7 +20,6 @@ from sklearn.metrics import roc_auc_score
 from dataloader import create_train_val_v2, _construct_output_data_alt, load_evaluation_data
 from trajectories import assemble_ground_truth_and_reconstructions, load_anomaly_masks, compute_rnn_ae_reconstruction_errors, summarise_reconstruction_errors, discard_information_from_padded_frames
 from utils import batch_inference
-
 from models.trajrec import trajrec_tiny, trajrec_small, trajrec_base, trajrec_large, trajrec_huge, TrajREC
 
 import wandb
@@ -27,7 +27,8 @@ import wandb
 
 
 @torch.no_grad()
-def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size=None, setting='future', is_avenue=False):
+def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size=None, setting='future', is_avenue=False,
+                         elsec_data=False):
     input_length = model.input_length
     pred_length = model.prediction_length
 
@@ -59,7 +60,7 @@ def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size
                                                                                     pred_errors, pred_length)
         pred_ids, pred_frames, pred_errors = summarise_reconstruction_errors(pred_errors, pred_frames, pred_ids)
         y_true_pred, y_hat_pred, y_grouped_true, y_grouped_hat = assemble_ground_truth_and_reconstructions(
-                anomaly_masks, pred_ids, pred_frames, pred_errors, return_grouped_scores=True)
+            anomaly_masks, pred_ids, pred_frames, pred_errors, return_grouped_scores=True, elsec_data=elsec_data)
         all_y_true.append(y_true_pred)
         all_y_hat.append(y_hat_pred)
         all_y_grouped_true.update(y_grouped_true)
@@ -88,10 +89,14 @@ def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size
 def create_train_val_datasets(args):
     x_train, y_train, val_data, train_trajectories, val_trajectories, bb_scaler, joint_scaler, out_scaler = \
             create_train_val_v2(trajectories_path=args['trajectories'], video_resolution=args['video_resolution'],
-                                input_length=args['input_length'], pred_length=args['pred_length'])
+                                input_length=args['input_length'], pred_length=args['pred_length'], elsec_data=args['elsec_data'])
 
     x_global_train, x_local_train, x_out_train = x_train
+    x_local_train = x_local_train.astype(np.float32)
+    x_out_train = x_out_train.astype(np.float32)
     x_global_val, x_local_val, x_out_val = val_data[0]
+    x_local_val = x_local_val.astype(np.float32)
+    x_out_val = x_out_val.astype(np.float32)
 
     if y_train is not None:  # yes
         y_global_train, y_local_train, y_out_train = y_train
@@ -115,6 +120,18 @@ def create_train_val_datasets(args):
     return x_local_train.shape[-1], TensorDataset(*train_tensors), TensorDataset(*val_tensors), \
             bb_scaler, joint_scaler, out_scaler
 
+def load_anomaly_masks_elsec(anomaly_masks_path):
+    file_names = os.listdir(anomaly_masks_path)
+    masks = {}
+    for file_name in file_names:
+        if file_name.split('.')[1] == 'csv':
+            pandas_df = pd.read_csv(os.path.join(anomaly_masks_path, file_name))
+            masks = dict(zip(pandas_df.iloc[:, 0], pandas_df.iloc[:,1]))
+
+    # Convert dictionary values to numpy array and remove duplicates
+    sorted_keys = sorted(set(masks.keys()))
+    masks = np.array([masks[k] for k in sorted_keys])
+    return masks
 
 def run(args):
     print(args)
@@ -175,14 +192,23 @@ def run(args):
     data_test = []
     for camera_id in sorted(os.listdir(os.path.join(args['testdata'], 'trajectories'))):
         tpath = os.path.join(os.path.join(args['testdata'], 'trajectories'), camera_id)
-        masks = load_anomaly_masks(os.path.join(args['testdata'], 'frame_level_masks', camera_id))
-        ids, frames, X_bb, X_joints, X_out, _, _, _ = load_evaluation_data(bb_scaler,joint_scaler,out_scaler,tpath,inp_len=args['input_length'],inp_gap=0,pred_len=args['pred_length'],res=res,bb_norm='zero_one',joint_norm='zero_one',out_norm='zero_one', rec_data=True,sort='avenue' in args['testdata'].lower())
+        if args["elsec_data"] == True:
+           masks = load_anomaly_masks_elsec(os.path.join(args['testdata'], 'frame_level_masks', camera_id))
+        else:
+            masks = load_anomaly_masks(os.path.join(args['testdata'], 'frame_level_masks', camera_id))
+        ids, frames, X_bb, X_joints, X_out, _, _, _ = load_evaluation_data(bb_scaler,joint_scaler,out_scaler,tpath,
+                                                                           inp_len=args['input_length'],inp_gap=0,
+                                                                           pred_len=args['pred_length'],res=res,
+                                                                           bb_norm='zero_one',joint_norm='zero_one',
+                                                                           out_norm='zero_one', rec_data=True,
+                                                                           sort='avenue' in args['testdata'].lower(),
+                                                                           elsec_data=args['elsec_data'])
         data_test.append((masks, ids, frames, X_bb, X_joints, X_out))
     
 
     train_loader = torch.utils.data.DataLoader(dataset_train, shuffle=True, batch_size=args['batch_size'], num_workers=4, pin_memory=True)
 
-    val_loader = torch.utils.data.DataLoader(dataset_val, shuffle=False, batch_size=args['batch_size'], num_workers=4, pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(dataset_val, shuffle=False, batch_size=args['batch_size'], num_workers=0, pin_memory=False)
 
 
     if 'trajrec' in args['model']:
@@ -256,6 +282,9 @@ def run(args):
                     inputs_sk, target_sk = data_skeleton[:3], data_skeleton[6:]
                     inputs_sk = [torch.cat((inputs_sk[0],target_sk[0]),dim=1), torch.cat((inputs_sk[1],target_sk[1]),dim=1), torch.cat((inputs_sk[2],target_sk[2]),dim=1)]
 
+                    # Convert all input tensors to float32 to avoid dtype mismatch
+                    inputs_sk = [tensor.to(torch.float32) for tensor in inputs_sk]
+
                     losses,eloss,output,target_sk = model(inputs_sk,setting,compute_loss=True)
                     if phase=='train':
                         loss = sum(losses[:-1]) + eloss
@@ -299,7 +328,8 @@ def run(args):
                 if 'val' in phase:
                     
                     auc_pred, _, _ = prediction_auc_score(model, data_test, reconstruct_original_data=True,
-                                                batch_size=args['batch_size'], setting=setting, is_avenue='avenue' in args['trajectories'].lower())
+                                                batch_size=args['batch_size'], setting=setting, is_avenue='avenue' in args['trajectories'].lower(),
+                                                          elsec_data=args['elsec_data'])
                     print(f'Test setting {setting}: [MSE: {loss_meter.avg:.6f} | AUC: {auc_pred:.4f}]')
                     stats[setting] = [loss_meter.avg,auc_pred]
                     if args['wandb']:
@@ -398,10 +428,13 @@ if __name__=='__main__':
     parser.add_argument('--wandb',default=True,type=lambda x: (str(x).lower() == 'true'),help='Bool indicating if to use wandb')
     parser.add_argument('--save_best',default=True,type=lambda x: (str(x).lower() == 'true'),help='Bool if to save the checkpoint with best (avg) AUC')
     parser.add_argument('--eval_only',default=False,type=lambda x: (str(x).lower() == 'true'),help='Bool if to only run inference.')
+    parser.add_argument('--elsec_data',default=False,type=bool,help='Bool if to use elsec data')
 
     _args = parser.parse_args()
+    # _args.elsec_data = True
+    _args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories'
+    _args.testdata = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/'
     _args = vars(_args)
-
     aucs = run(_args)
     print(aucs)
 

@@ -103,11 +103,11 @@ def _aggregate_rnn_autoencoder_data(coordinates, input_length, input_gap=0, pred
 @memory.cache
 def create_train_val_v2(trajectories_path, video_resolution, input_length, pred_length, reconstruct_original_data=True,
                         input_missing_steps=False, global_normalisation_strategy='zero_one',
-                        local_normalisation_strategy='zero_one', out_normalisation_strategy='zero_one'):
+                        local_normalisation_strategy='zero_one', out_normalisation_strategy='zero_one', elsec_data=False):
     video_resolution = [float(measurement) for measurement in video_resolution.split('x')]
     video_resolution = np.array(video_resolution, dtype=np.float32)
-
-    trajectories = load_trajectories(trajectories_path)
+    # print('hello')
+    trajectories = load_trajectories(trajectories_path, elsec_data=elsec_data)
     #print('\nLoaded %d trajectories.' % len(trajectories))
 
 
@@ -332,8 +332,9 @@ def load_evaluation_data(global_scaler,
                          joint_norm='zero_one',
                          out_norm='zero_one', 
                          rec_data=True,
-                         sort=False):
-    trajectories = load_trajectories(trajectories_path, sort)
+                         sort=False,
+                         elsec_data=False):
+    trajectories = load_trajectories(trajectories_path, sort, elsec_data=elsec_data)
 
     trajectories = remove_short_trajectories(trajectories, input_length=inp_len,
                                              input_gap=inp_gap, pred_length=pred_len)
