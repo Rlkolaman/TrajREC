@@ -134,6 +134,10 @@ def load_anomaly_masks_elsec(anomaly_masks_path):
     return masks
 
 def run(args):
+    import os
+
+    os.environ['WANDB_API_KEY'] = '36c3fb797c58f587d79466abefbad2d8fc744b4a'
+    print(f"WANDB_API_KEY set to: {os.environ['WANDB_API_KEY']}")
     print(args)
     random.seed(args['seed'])
     np.random.seed(args['seed'])
