@@ -615,7 +615,7 @@ def main():
     args.elsec_db = True
     if args.elsec_db:
         args.gt_trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories/2023_2_10'
-        args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories/2023_2_10'
+        args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectFalseories/2023_2_10'
         args.frames = '/home/pp/Desktop/datasets/elsec_dataset/frame/01'
         args.test_data_dir = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing'
         if not os.path.exists(args.write_dir):

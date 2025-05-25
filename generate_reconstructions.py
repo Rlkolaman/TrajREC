@@ -128,7 +128,7 @@ def main():
     
     input_length = model.input_length
     pred_length = model.prediction_length
-    all_trajectories_path = os.path.join(args['trajectories'], 'trajectories-corrected')
+    all_trajectories_path = os.path.join(args['trajectories'], 'trajectories')
     all_anomaly_masks = os.path.join(args['trajectories'], 'frame_level_masks')
     input_length = args['input_length']
     pred_length = args['pred_length']
