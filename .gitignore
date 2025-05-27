@@ -165,7 +165,7 @@ weights/
 models/__pycache__/
 reconstructed/
 
-best_ckpt.pt
+best_ckpt_elsec.pt
 /envs/bin/2to3
 /envs/bin/2to3-3.10
 /envs/bin/bunzip2
