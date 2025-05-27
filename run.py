@@ -7,6 +7,9 @@ import os
 import pickle
 import random
 import sys
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import precision_recall_curve, roc_auc_score
 import numpy as np
 import pandas as pd
 import torch.nn as nn
@@ -16,7 +19,6 @@ from torch.utils.data import TensorDataset
 from tqdm import tqdm
 import utils
 from sklearn.metrics import roc_auc_score
-
 from dataloader import create_train_val_v2, _construct_output_data_alt, load_evaluation_data
 from trajectories import assemble_ground_truth_and_reconstructions, load_anomaly_masks, compute_rnn_ae_reconstruction_errors, summarise_reconstruction_errors, discard_information_from_padded_frames
 from utils import batch_inference
@@ -82,7 +84,30 @@ def prediction_auc_score(model, data, reconstruct_original_data=True, batch_size
         if i in scores:
             mask[i] = 0
     mask = [m == 1 for m in mask]
-    
+
+    # Assuming all_y_true and all_y_hat are defined
+    # all_y_true: array of true binary labels (0 or 1)
+    # all_y_hat: array of predicted probabilities for the positive class
+
+    # Calculate ROC AUC score
+    roc_auc = roc_auc_score(all_y_true, all_y_hat)
+    print(f"ROC AUC Score: {roc_auc:.4f}")
+
+    # Calculate precision-recall curve
+    precision, recall, thresholds = precision_recall_curve(all_y_true, all_y_hat)
+
+    # Create the precision-recall plot
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall, precision, 'b-', label=f'Precision-Recall Curve (AUC = {roc_auc:.4f})')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve')
+    plt.grid(True)
+    plt.legend()
+
+    # Save the plot to a file
+    plt.savefig('precision_recall_curve.png')
+    plt.close()
     return roc_auc_score(all_y_true, all_y_hat), all_y_grouped_true, all_y_grouped_hat
 
 
@@ -136,7 +161,7 @@ def load_anomaly_masks_elsec(anomaly_masks_path):
 def run(args):
     import os
 
-    os.environ['WANDB_API_KEY'] = '36c3fb797c58f587d79466abefbad2d8fc744b4a'
+    os.environ['WANDB_API_KEY'] = '26fa19cef62de16bb9c521aa45d45d8e1c53e7ce'
     print(f"WANDB_API_KEY set to: {os.environ['WANDB_API_KEY']}")
     print(args)
     random.seed(args['seed'])
@@ -334,6 +359,7 @@ def run(args):
                     auc_pred, _, _ = prediction_auc_score(model, data_test, reconstruct_original_data=True,
                                                 batch_size=args['batch_size'], setting=setting, is_avenue='avenue' in args['trajectories'].lower(),
                                                           elsec_data=args['elsec_data'])
+
                     print(f'Test setting {setting}: [MSE: {loss_meter.avg:.6f} | AUC: {auc_pred:.4f}]')
                     stats[setting] = [loss_meter.avg,auc_pred]
                     if args['wandb']:
@@ -357,7 +383,7 @@ def run(args):
                     state = {'model_name': args['model'], 'model': model.state_dict(), 'epoch': epoch,
                     'input_length': model.input_length, 'prediction_length': model.prediction_length,
                     'bb_scaler': bb_scaler, 'joint_scaler': joint_scaler, 'out_scaler': out_scaler}
-                    torch.save(state, 'best_ckpt.pt')
+                    torch.save(state, 'best_ckpt_elsec.pt')
         print(f"AVG : [MSE: {sum_mae:.6f} | AUC: {sum_auc:.4f}]")
         if args['wandb']:
             wandb.log({f"max_AUC_{setting}": max_AUC[setting] for setting in max_AUC.keys()})
@@ -436,8 +462,8 @@ if __name__=='__main__':
 
     _args = parser.parse_args()
     # _args.elsec_data = True
-    _args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories'
-    _args.testdata = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/'
+    # _args.trajectories = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/trajectories'
+    # _args.testdata = '/home/pp/Desktop/datasets/trajrec_data/elsec_data/testing/'
     _args = vars(_args)
     aucs = run(_args)
     print(aucs)
